@@ -24,27 +24,6 @@ namespace unmined {
 
 using namespace std::chrono_literals;
 
-inline void spinner(int a = 4) {
-  for (int idx = 0; idx < a; ++idx) {
-    std::cout << ("\\");
-    std::this_thread::sleep_for(100ms);
-    std::cout.flush();
-    printf("\033[1D\r");
-    std::cout << ("|");
-    std::this_thread::sleep_for(100ms);
-    std::cout.flush();
-    printf("\033[1D\r");
-    std::cout << ("/");
-    std::this_thread::sleep_for(100ms);
-    std::cout.flush();
-    printf("\033[1D\r");
-    std::cout << ("-");
-    std::this_thread::sleep_for(100ms);
-    std::cout.flush();
-    printf("\033[1D\r");
-  }
-}
-
 /**
  * @brief The possible settings for the task manager
  */

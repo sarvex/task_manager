@@ -54,11 +54,6 @@ void unmined::task_manager<WORKER_COUNT>::_run_worker(int id) {
 
   while (!util::get(stop_, kill_lock_)) {
     if (util::get(is_paused_, is_paused_lock_)) continue;
-//    if (util::get(queue_, queue_lock_).empty()) {
-//      printf("queue_ empty\n");
-//      if (get(KILL_ON_EMPTY) == true) break;
-//      continue;
-//    }
     struct task task = _pop_queue();
     if (!task.func) {
       if (get(KILL_ON_EMPTY)) break;
@@ -74,7 +69,6 @@ void unmined::task_manager<WORKER_COUNT>::_run_worker(int id) {
         }
         continue;
       }
-//      while (!util::has(util::get(done_, done_lock_), task.name)) std::this_thread::sleep_for(100ms);
     }
 
     task_start_callback(task, id);
