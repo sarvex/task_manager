@@ -49,7 +49,7 @@ def find_files(folder: str, depth: int = 4) -> list:
 
 
 path = "src"
-outfile = "src/task_manager.hpp"
+outfile = "release/task_manager.hpp"
 exclude = ["main.cpp"]
 
 files = find_files(path)

@@ -7,12 +7,12 @@ set(AMALGAMATED ${PROJECT_NAME}_a)
 set(NAMALGAMATED ${PROJECT_NAME})
 
 add_executable(${NAMALGAMATED}
-        src/main.cpp
+        main.cpp
         src/task_manager.h src/task_manager.cpp
         src/util.h)
 
 add_executable(${AMALGAMATED}
-        src/main.cpp
+        main.cpp
         release/task_manager.hpp)
 
 target_compile_definitions(${AMALGAMATED} PUBLIC AMALGAMATED)
