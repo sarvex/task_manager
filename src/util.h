@@ -11,6 +11,22 @@
 
 namespace unmined::util {
 
+template<typename T, typename K>
+bool has(const T &arr, const K &to_find);
+
+template<typename T>
+T get(const T &x, std::mutex &mut);
+
+template<typename T>
+void modify(T &x, std::mutex &mut, void(*func)(T &x));
+
+inline std::string to_string(const unmined::task &t);
+
+template<typename T>
+inline std::string to_string(std::deque<T> q);
+
+inline std::string to_string(const std::vector<std::string> &q);
+
 /**
  * @brief Checks if an array has a certain element
  * @tparam T The type of the array
@@ -54,6 +70,29 @@ template<typename T>
 void modify(T &x, std::mutex &mut, void(*func)(T &x)) {
   GUARD(mut);
   func(x);
+}
+
+inline std::string to_string(const unmined::task &t) {
+  return t.name;
+}
+
+template<typename T>
+inline std::string to_string(std::deque<T> q) {
+  std::string out;
+  for (auto i: q) {
+    out += to_string(i);
+    out += ", ";
+  }
+  return out;
+}
+
+inline std::string to_string(const std::vector<std::string> &q) {
+  std::string out;
+  for (const auto &i: q) {
+    out += i;
+    out += ", ";
+  }
+  return out;
 }
 
 }

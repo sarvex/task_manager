@@ -54,19 +54,27 @@ void unmined::task_manager<WORKER_COUNT>::_run_worker(int id) {
 
   while (!util::get(stop_, kill_lock_)) {
     if (util::get(is_paused_, is_paused_lock_)) continue;
-    if (util::get(queue_, queue_lock_).empty()) {
-      if (get(KILL_ON_EMPTY) == true) break;
+//    if (util::get(queue_, queue_lock_).empty()) {
+//      printf("queue_ empty\n");
+//      if (get(KILL_ON_EMPTY) == true) break;
+//      continue;
+//    }
+    struct task task = _pop_queue();
+    if (!task.func) {
+      if (get(KILL_ON_EMPTY)) break;
       continue;
     }
 
-    struct task task = _pop_queue();
-
-    if (!task.settings[AFTER].empty()) {
-      if (!util::has(done_, task.name)) {
-        queue_.push_back(task); // TODO: rework this, its garbo
+    std::string after = task.settings[AFTER];
+    if (!after.empty()) {
+      if (!util::has(util::get(done_, done_lock_), after)) {
+        {
+          GUARD(queue_lock_);
+          queue_.push_back(task); // TODO: rework this, its garbo
+        }
         continue;
       }
-      while (!util::has(done_, task.name)) std::this_thread::sleep_for(100ms);
+//      while (!util::has(util::get(done_, done_lock_), task.name)) std::this_thread::sleep_for(100ms);
     }
 
     task_start_callback(task, id);
@@ -131,6 +139,7 @@ std::vector<std::string> unmined::task_manager<WORKER_COUNT>::tasks() {
 template<int WORKER_COUNT>
 unmined::task unmined::task_manager<WORKER_COUNT>::_pop_queue() {
   GUARD(queue_lock_);
+  if (queue_.empty()) return task();
   task t = queue_.front();
   queue_.pop_front();
   return t;
