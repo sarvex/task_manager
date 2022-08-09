@@ -49,8 +49,7 @@ void unmined::task_manager<WORKER_COUNT>::_run() {
 
 template<int WORKER_COUNT>
 void unmined::task_manager<WORKER_COUNT>::_run_worker(int id) {
-  printf("[%i]: Started\n", id);
-  std::cout.flush();
+  worker_start_callback(id);
 
   while (!util::get(stop_, kill_lock_)) {
     if (util::get(is_paused_, is_paused_lock_)) continue;
@@ -78,8 +77,7 @@ void unmined::task_manager<WORKER_COUNT>::_run_worker(int id) {
     done_.push_back(task.name);
     task_stop_callback(task, id);
   }
-  printf("[%i]: Stopped\n", id);
-  std::cout.flush();
+  worker_stop_callback(id);
 }
 template<int WORKER_COUNT>
 unmined::task_manager<WORKER_COUNT> *unmined::task_manager<WORKER_COUNT>::get_instance() {
@@ -95,8 +93,6 @@ void unmined::task_manager<WORKER_COUNT>::add(const task &task) {
 template<int WORKER_COUNT>
 void unmined::task_manager<WORKER_COUNT>::start() {
   GUARD(is_paused_lock_);
-  std::cout << "Settings: ";
-  std::cout << std::endl;
   is_paused_ = false;
 }
 template<int WORKER_COUNT>
@@ -113,13 +109,11 @@ void unmined::task_manager<WORKER_COUNT>::stop() {
 template<int WORKER_COUNT>
 bool unmined::task_manager<WORKER_COUNT>::is_done() {
   GUARD(queue_lock_);
-  std::cout << "A" << queue_.size() << "B" << std::endl;
   return queue_.empty();
 }
 template<int WORKER_COUNT>
 void unmined::task_manager<WORKER_COUNT>::join() {
   main_thread_.join();
-  printf("done\n");
 }
 
 template<int WORKER_COUNT>
