@@ -60,7 +60,7 @@ enum task_settings {
  */
 struct task {
   std::string name; // the name of the task
-  int (*func)(); // the function to be _run for said task
+  std::function<int()> func; // the function to be _run for said task
   std::unordered_map<enum task_settings, std::string> settings{ // the settings of the tesk
       {AFTER, ""}
   };
@@ -107,20 +107,35 @@ class task_manager {
    * @param t
    * @param wid
    */
-  void (*task_start_callback)(const task &t, int wid) =[](const task &t, int wid) {};
+  std::function<void(const task &t, const int &wid)> task_start_callback
+      = [](const task &t, const int &wid) {};
   /**
    * @brief The function called when a task finishes
    * @param t
    * @param wid
    */
-  void (*task_stop_callback)(const task &t, int wid) =[](const task &t, int wid) {};
+  std::function<void(const task &t, const int &wid)> task_stop_callback
+      = [](const task &t, const int &wid) {};
   /**
    * @brief The function called when a task fails
    * @param t task - The task
    * @param wid int - The worker ID
    * @param err int - The error returned from the task
    */
-  void (*task_fail_callback)(const task &t, int wid, int err) =[](const task &t, int wid, int err) {};
+  std::function<void(const task &t, const int &wid, const int &err)> task_fail_callback
+      = [](const task &t, const int &wid, const int &err) {};
+
+  /**
+   * @brief The function called when a worker starts
+   * @param wid int - The worker ID
+   */
+  std::function<void(const int &wid)> worker_start_callback = [](const int &wid) {};
+
+  /**
+   * @brief The function called when a worker stops
+   * @param wid int - The worker ID
+   */
+  std::function<void(const int &wid)> worker_stop_callback = [](const int &wid) {};
 
  private:
   /// makes a new task manager, do not use this
@@ -199,7 +214,8 @@ class task_manager {
   void set(tm_settings t, bool val) {
     GUARD(settings_lock_);
     if (val) SET_ON(settings_, t);
-    else SET_OFF(settings_, ~t);
+    else
+      SET_OFF(settings_, ~t);
   }
 
   /**
@@ -373,8 +389,7 @@ void unmined::task_manager<WORKER_COUNT>::_run() {
 
 template<int WORKER_COUNT>
 void unmined::task_manager<WORKER_COUNT>::_run_worker(int id) {
-  printf("[%i]: Started\n", id);
-  std::cout.flush();
+  worker_start_callback(id);
 
   while (!util::get(stop_, kill_lock_)) {
     if (util::get(is_paused_, is_paused_lock_)) continue;
@@ -402,8 +417,7 @@ void unmined::task_manager<WORKER_COUNT>::_run_worker(int id) {
     done_.push_back(task.name);
     task_stop_callback(task, id);
   }
-  printf("[%i]: Stopped\n", id);
-  std::cout.flush();
+  worker_stop_callback(id);
 }
 template<int WORKER_COUNT>
 unmined::task_manager<WORKER_COUNT> *unmined::task_manager<WORKER_COUNT>::get_instance() {
@@ -419,8 +433,6 @@ void unmined::task_manager<WORKER_COUNT>::add(const task &task) {
 template<int WORKER_COUNT>
 void unmined::task_manager<WORKER_COUNT>::start() {
   GUARD(is_paused_lock_);
-  std::cout << "Settings: ";
-  std::cout << std::endl;
   is_paused_ = false;
 }
 template<int WORKER_COUNT>
@@ -437,13 +449,11 @@ void unmined::task_manager<WORKER_COUNT>::stop() {
 template<int WORKER_COUNT>
 bool unmined::task_manager<WORKER_COUNT>::is_done() {
   GUARD(queue_lock_);
-  std::cout << "A" << queue_.size() << "B" << std::endl;
   return queue_.empty();
 }
 template<int WORKER_COUNT>
 void unmined::task_manager<WORKER_COUNT>::join() {
   main_thread_.join();
-  printf("done\n");
 }
 
 template<int WORKER_COUNT>
