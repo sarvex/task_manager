@@ -52,7 +52,21 @@ enum tm_settings {
  * @brief The possible settings for a task
  */
 enum task_settings {
+  /**
+   * @brief The task that the current is after
+   */
   AFTER = 0,
+  /**
+   * @brief The pool (vector) that the task should return to
+   */
+  POOL = 1,
+  /// The ID of the task, will be overwritten by the task manager
+  ID = -1,
+};
+
+struct retype {
+  std::string ret;
+  int err;
 };
 
 /**
@@ -60,10 +74,12 @@ enum task_settings {
  */
 struct task {
   std::string name; // the name of the task
-  std::function<int()> func; // the function to be _run for said task
+  std::function<retype()> func; // the function to be _run for said task
   std::unordered_map<enum task_settings, std::string> settings{ // the settings of the tesk
-      {AFTER, ""}
+      {AFTER, ""},
+      {POOL, name},
   };
+  int id = -1;
 };
 
 /**
@@ -85,6 +101,10 @@ class task_manager {
   std::deque<task> queue_;
   /// A vector of the done tasks' names
   std::vector<std::string> done_;
+  /// A map of the pools that functions can return to
+  std::unordered_map<std::string, std::unordered_map<int, std::string>> pools_;
+  /// The next available task IDs for which pool
+  std::unordered_map<std::string, int> pool_ntIDs;
   /// If the task manager is paused
   bool is_paused_ = true;
   /// If the task manager is stopped, will kill the task manager cleanly
@@ -98,21 +118,23 @@ class task_manager {
   std::mutex kill_lock_;
   std::mutex done_lock_;
   std::mutex queue_lock_;
+  std::mutex pools_lock_;
+  std::mutex pool_ntids_lock_;
 
  public:
   // TODO: REWORK THIS, maybe make them private or sm
 
   /**
    * @brief The function called when a task starts
-   * @param t
-   * @param wid
+   * @param t task - The task
+   * @param wid int - The worker ID
    */
   std::function<void(const task &t, const int &wid)> task_start_callback
       = [](const task &t, const int &wid) {};
   /**
    * @brief The function called when a task finishes
-   * @param t
-   * @param wid
+   * @param t task - The task
+   * @param wid int - The worker ID
    */
   std::function<void(const task &t, const int &wid)> task_stop_callback
       = [](const task &t, const int &wid) {};
@@ -124,7 +146,6 @@ class task_manager {
    */
   std::function<void(const task &t, const int &wid, const int &err)> task_fail_callback
       = [](const task &t, const int &wid, const int &err) {};
-
   /**
    * @brief The function called when a worker starts
    * @param wid int - The worker ID
@@ -175,7 +196,7 @@ class task_manager {
    * @brief Adds a task to the queue of tasks to be done
    * @param task task - The task to be done, will be last in the order
    */
-  void add(const struct task &task);
+  void add(task task);
 
   /**
    * @brief Starts fulfilling tasks
@@ -227,6 +248,10 @@ class task_manager {
     return EVAL(settings_, mask);
   }
 
+  void clear_pool(const std::string &pool);
+  std::unordered_map<std::string, std::unordered_map<int, std::string>> pools();
+  std::unordered_map<int, std::string> pool(const std::string& name);
+
 };
 
 }
@@ -254,9 +279,6 @@ bool has(const T &arr, const K &to_find);
 
 template<typename T>
 T get(const T &x, std::mutex &mut);
-
-template<typename T>
-void modify(T &x, std::mutex &mut, void(*func)(T &x));
 
 inline std::string to_string(const unmined::task &t);
 
@@ -295,19 +317,6 @@ T get(const T &x, std::mutex &mut) {
   GUARD(mut);
   T o = x;
   return o;
-}
-
-/**
- * @brief Modifies a variable thread-safely
- * @tparam T The type of the variable
- * @param x The variable to modify
- * @param mut The mutex (lock) for the variable
- * @param func The function acting upon the variable
- */
-template<typename T>
-void modify(T &x, std::mutex &mut, void(*func)(T &x)) {
-  GUARD(mut);
-  func(x);
 }
 
 inline std::string to_string(const unmined::task &t) {
@@ -411,10 +420,16 @@ void unmined::task_manager<WORKER_COUNT>::_run_worker(int id) {
     }
 
     task_start_callback(task, id);
-    int err = task.func();
+    auto [val, err] = task.func();
     if (err < 0) task_fail_callback(task, id, err);
-    GUARD(done_lock_);
-    done_.push_back(task.name);
+    {
+      GUARD(done_lock_);
+      done_.push_back(task.name);
+    }
+    {
+      GUARD(pools_lock_);
+      pools_[task.settings[POOL]][task.id] = val;
+    }
     task_stop_callback(task, id);
   }
   worker_stop_callback(id);
@@ -425,9 +440,15 @@ unmined::task_manager<WORKER_COUNT> *unmined::task_manager<WORKER_COUNT>::get_in
   return instance_;
 }
 template<int WORKER_COUNT>
-void unmined::task_manager<WORKER_COUNT>::add(const task &task) {
-  GUARD(queue_lock_);
-  queue_.push_back(task);
+void unmined::task_manager<WORKER_COUNT>::add(task task) {
+  {
+    GUARD(pool_ntids_lock_);
+    task.id = pool_ntIDs[task.settings[POOL]]++;
+  }
+  {
+    GUARD(queue_lock_);
+    queue_.push_back(task);
+  }
 }
 
 template<int WORKER_COUNT>
@@ -471,4 +492,19 @@ unmined::task unmined::task_manager<WORKER_COUNT>::_pop_queue() {
   task t = queue_.front();
   queue_.pop_front();
   return t;
+}
+template<int WORKER_COUNT>
+void unmined::task_manager<WORKER_COUNT>::clear_pool(const std::string &pool) {
+  std::remove(pools_.begin(), pools_.end(), pools_.find(pool));
+}
+template<int WORKER_COUNT>
+std::unordered_map<std::string, std::unordered_map<int, std::string>> unmined::task_manager<WORKER_COUNT>::pools() {
+  GUARD(pools_lock_);
+  return pools_;
+}
+template<int WORKER_COUNT>
+std::unordered_map<int, std::string> unmined::task_manager<WORKER_COUNT>::pool(const std::string &name) {
+  std::vector<std::string> out;
+  GUARD(pools_lock_);
+  return pools_[name];
 }

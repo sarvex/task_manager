@@ -17,9 +17,6 @@ bool has(const T &arr, const K &to_find);
 template<typename T>
 T get(const T &x, std::mutex &mut);
 
-template<typename T>
-void modify(T &x, std::mutex &mut, void(*func)(T &x));
-
 inline std::string to_string(const unmined::task &t);
 
 template<typename T>
@@ -57,19 +54,6 @@ T get(const T &x, std::mutex &mut) {
   GUARD(mut);
   T o = x;
   return o;
-}
-
-/**
- * @brief Modifies a variable thread-safely
- * @tparam T The type of the variable
- * @param x The variable to modify
- * @param mut The mutex (lock) for the variable
- * @param func The function acting upon the variable
- */
-template<typename T>
-void modify(T &x, std::mutex &mut, void(*func)(T &x)) {
-  GUARD(mut);
-  func(x);
 }
 
 inline std::string to_string(const unmined::task &t) {

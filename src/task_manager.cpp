@@ -71,10 +71,16 @@ void unmined::task_manager<WORKER_COUNT>::_run_worker(int id) {
     }
 
     task_start_callback(task, id);
-    int err = task.func();
+    auto [val, err] = task.func();
     if (err < 0) task_fail_callback(task, id, err);
-    GUARD(done_lock_);
-    done_.push_back(task.name);
+    {
+      GUARD(done_lock_);
+      done_.push_back(task.name);
+    }
+    {
+      GUARD(pools_lock_);
+      pools_[task.settings[POOL]][task.id] = val;
+    }
     task_stop_callback(task, id);
   }
   worker_stop_callback(id);
@@ -85,9 +91,15 @@ unmined::task_manager<WORKER_COUNT> *unmined::task_manager<WORKER_COUNT>::get_in
   return instance_;
 }
 template<int WORKER_COUNT>
-void unmined::task_manager<WORKER_COUNT>::add(const task &task) {
-  GUARD(queue_lock_);
-  queue_.push_back(task);
+void unmined::task_manager<WORKER_COUNT>::add(task task) {
+  {
+    GUARD(pool_ntids_lock_);
+    task.id = pool_ntIDs[task.settings[POOL]]++;
+  }
+  {
+    GUARD(queue_lock_);
+    queue_.push_back(task);
+  }
 }
 
 template<int WORKER_COUNT>
@@ -131,4 +143,19 @@ unmined::task unmined::task_manager<WORKER_COUNT>::_pop_queue() {
   task t = queue_.front();
   queue_.pop_front();
   return t;
+}
+template<int WORKER_COUNT>
+void unmined::task_manager<WORKER_COUNT>::clear_pool(const std::string &pool) {
+  std::remove(pools_.begin(), pools_.end(), pools_.find(pool));
+}
+template<int WORKER_COUNT>
+std::unordered_map<std::string, std::unordered_map<int, std::string>> unmined::task_manager<WORKER_COUNT>::pools() {
+  GUARD(pools_lock_);
+  return pools_;
+}
+template<int WORKER_COUNT>
+std::unordered_map<int, std::string> unmined::task_manager<WORKER_COUNT>::pool(const std::string &name) {
+  std::vector<std::string> out;
+  GUARD(pools_lock_);
+  return pools_[name];
 }

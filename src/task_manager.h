@@ -36,7 +36,21 @@ enum tm_settings {
  * @brief The possible settings for a task
  */
 enum task_settings {
+  /**
+   * @brief The task that the current is after
+   */
   AFTER = 0,
+  /**
+   * @brief The pool (vector) that the task should return to
+   */
+  POOL = 1,
+  /// The ID of the task, will be overwritten by the task manager
+  ID = -1,
+};
+
+struct retype {
+  std::string ret;
+  int err;
 };
 
 /**
@@ -44,10 +58,12 @@ enum task_settings {
  */
 struct task {
   std::string name; // the name of the task
-  std::function<int()> func; // the function to be _run for said task
+  std::function<retype()> func; // the function to be _run for said task
   std::unordered_map<enum task_settings, std::string> settings{ // the settings of the tesk
-      {AFTER, ""}
+      {AFTER, ""},
+      {POOL, name},
   };
+  int id = -1;
 };
 
 /**
@@ -69,6 +85,10 @@ class task_manager {
   std::deque<task> queue_;
   /// A vector of the done tasks' names
   std::vector<std::string> done_;
+  /// A map of the pools that functions can return to
+  std::unordered_map<std::string, std::unordered_map<int, std::string>> pools_;
+  /// The next available task IDs for which pool
+  std::unordered_map<std::string, int> pool_ntIDs;
   /// If the task manager is paused
   bool is_paused_ = true;
   /// If the task manager is stopped, will kill the task manager cleanly
@@ -82,21 +102,23 @@ class task_manager {
   std::mutex kill_lock_;
   std::mutex done_lock_;
   std::mutex queue_lock_;
+  std::mutex pools_lock_;
+  std::mutex pool_ntids_lock_;
 
  public:
   // TODO: REWORK THIS, maybe make them private or sm
 
   /**
    * @brief The function called when a task starts
-   * @param t
-   * @param wid
+   * @param t task - The task
+   * @param wid int - The worker ID
    */
   std::function<void(const task &t, const int &wid)> task_start_callback
       = [](const task &t, const int &wid) {};
   /**
    * @brief The function called when a task finishes
-   * @param t
-   * @param wid
+   * @param t task - The task
+   * @param wid int - The worker ID
    */
   std::function<void(const task &t, const int &wid)> task_stop_callback
       = [](const task &t, const int &wid) {};
@@ -108,7 +130,6 @@ class task_manager {
    */
   std::function<void(const task &t, const int &wid, const int &err)> task_fail_callback
       = [](const task &t, const int &wid, const int &err) {};
-
   /**
    * @brief The function called when a worker starts
    * @param wid int - The worker ID
@@ -159,7 +180,7 @@ class task_manager {
    * @brief Adds a task to the queue of tasks to be done
    * @param task task - The task to be done, will be last in the order
    */
-  void add(const struct task &task);
+  void add(task task);
 
   /**
    * @brief Starts fulfilling tasks
@@ -210,6 +231,10 @@ class task_manager {
   bool get(tm_settings mask) {
     return EVAL(settings_, mask);
   }
+
+  void clear_pool(const std::string &pool);
+  std::unordered_map<std::string, std::unordered_map<int, std::string>> pools();
+  std::unordered_map<int, std::string> pool(const std::string& name);
 
 };
 

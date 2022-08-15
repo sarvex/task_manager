@@ -1,5 +1,6 @@
 # Project exclude paths
 /cmake-build-debug/
+/cmake-build-debug-coverage/
 
 # remove the main.cpp, it's unnecessary for the repo
 main.cpp
